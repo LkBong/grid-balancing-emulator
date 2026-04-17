@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Balance the Grid</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;500;600;700&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#080c14;--bg2:#0d1420;--bg3:#111b2e;--panel:#0f1928;
+  --border:rgba(80,160,255,0.15);--border2:rgba(80,160,255,0.3);
+  --blue:#3d8bff;--blue-dim:rgba(61,139,255,0.2);
+  --cyan:#00e5ff;--green:#00ff88;--green-dim:rgba(0,255,136,0.15);
+  --amber:#ffb800;--amber-dim:rgba(255,184,0,0.15);
+  --red:#ff3d3d;--red-dim:rgba(255,61,61,0.15);
+  --purple:#b56fff;--text:#c8deff;--text-dim:#5a7ba0;--text-bright:#e8f4ff;
+  --mono:'Share Tech Mono',monospace;--sans:'Barlow Condensed',sans-serif;--body:'Barlow',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--body);min-height:100vh;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);pointer-events:none;z-index:1000;}
+body::after{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(61,139,255,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(61,139,255,0.04) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0;}
+#app{position:relative;z-index:1;display:grid;grid-template-rows:auto 1fr auto;min-height:100vh;max-width:1400px;margin:0 auto;padding:12px;gap:10px;}
+#header{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:16px;padding:10px 16px;background:var(--panel);border:1px solid var(--border);border-radius:6px;position:relative;overflow:hidden;}
+#header::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--blue),var(--cyan),transparent);}
+.hdr-title{font-family:var(--sans);font-size:22px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--text-bright);}
+.hdr-title span{color:var(--cyan);}
+.hdr-sub{font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:2px;margin-top:1px;}
+.stat-strip{display:flex;gap:20px;justify-content:center;}
+.stat-item{text-align:center;}
+.stat-item .lbl{font-family:var(--mono);font-size:9px;color:var(--text-dim);letter-spacing:2px;text-transform:uppercase;}
+.stat-item .val{font-family:var(--mono);font-size:20px;font-weight:500;color:var(--text-bright);line-height:1.1;}
+.val.good{color:var(--green);}.val.warn{color:var(--amber);}.val.danger{color:var(--red);}
+.clock{text-align:right;}
+.clock-time{font-family:var(--mono);font-size:26px;color:var(--cyan);line-height:1;}
+.clock-lbl{font-family:var(--mono);font-size:9px;color:var(--text-dim);letter-spacing:2px;}
+#shift-prog{height:3px;background:var(--bg3);border-radius:2px;overflow:hidden;margin-top:3px;}
+#shift-prog-fill{height:100%;background:linear-gradient(90deg,var(--blue),var(--cyan));border-radius:2px;transition:width 0.5s;}
+#main{display:grid;grid-template-columns:260px 1fr 260px;gap:10px;min-height:0;}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:12px;position:relative;overflow:hidden;}
+.ph{font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:var(--text-dim);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.ph::before{content:'';width:3px;height:12px;border-radius:2px;flex-shrink:0;background:var(--blue);}
+.ph.cyan::before{background:var(--cyan);}.ph.green::before{background:var(--green);}.ph.amber::before{background:var(--amber);}.ph.red::before{background:var(--red);}.ph.purple::before{background:var(--purple);}
+#left-panel{display:flex;flex-direction:column;gap:8px;overflow-y:auto;}
+.gen-src{background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:9px 11px;transition:border-color 0.2s;}
+.gen-src.tripped{border-color:var(--red-dim);opacity:0.6;}
+.gen-top{display:flex;align-items:center;gap:7px;margin-bottom:6px;}
+.gen-icon{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
+.gen-name{font-family:var(--sans);font-size:13px;font-weight:600;letter-spacing:1px;color:var(--text-bright);flex:1;}
+.gen-mw{font-family:var(--mono);font-size:13px;color:var(--cyan);min-width:58px;text-align:right;}
+.gen-mw.zero{color:var(--text-dim);}
+.gen-bar{height:3px;background:var(--bg2);border-radius:2px;overflow:hidden;margin-bottom:5px;}
+.gen-bar-fill{height:100%;border-radius:2px;transition:width 0.4s;}
+.gen-meta{display:flex;justify-content:space-between;font-size:9px;color:var(--text-dim);font-family:var(--mono);}
+.gen-slider{width:100%;-webkit-appearance:none;appearance:none;height:3px;border-radius:2px;background:var(--bg2);outline:none;cursor:pointer;margin:4px 0 3px;}
+.gen-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--cyan);cursor:pointer;border:2px solid var(--bg);box-shadow:0 0 6px var(--cyan);}
+.gen-slider:disabled::-webkit-slider-thumb{background:var(--text-dim);box-shadow:none;}
+/* PULSE BUTTONS */
+.pulse-row{display:flex;align-items:center;gap:4px;margin-top:5px;}
+.pbtn{flex:1;padding:6px 4px;font-family:var(--mono);font-size:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text-dim);border-radius:3px;cursor:pointer;transition:all 0.12s;text-align:center;user-select:none;position:relative;overflow:hidden;}
+.pbtn:hover:not(:disabled){border-color:var(--border2);color:var(--text);}
+.pbtn.up:hover:not(:disabled){border-color:var(--green);color:var(--green);}
+.pbtn.down:hover:not(:disabled){border-color:var(--red);color:var(--red);}
+.pbtn:active:not(:disabled){transform:scale(0.95);}
+.pbtn:disabled{opacity:0.32;cursor:not-allowed;}
+.pbtn .cd-bar{position:absolute;bottom:0;left:0;height:2px;background:var(--amber);transition:width 0.15s linear;}
+.cd-lbl{font-family:var(--mono);font-size:9px;color:var(--amber);min-width:28px;text-align:center;}
+/* MODE BUTTONS */
+.btn-group{display:flex;gap:4px;margin-top:5px;}
+.cbtn{flex:1;padding:5px 5px;font-family:var(--mono);font-size:10px;letter-spacing:0.5px;background:var(--bg2);border:1px solid var(--border);color:var(--text-dim);border-radius:3px;cursor:pointer;transition:all 0.15s;text-transform:uppercase;position:relative;overflow:hidden;}
+.cbtn:hover:not(:disabled){border-color:var(--border2);color:var(--text);}
+.cbtn.active{background:var(--blue-dim);border-color:var(--blue);color:var(--blue);}
+.cbtn.active.gr{background:var(--green-dim);border-color:var(--green);color:var(--green);}
+.cbtn.active.am{background:var(--amber-dim);border-color:var(--amber);color:var(--amber);}
+.cbtn:disabled{opacity:0.36;cursor:not-allowed;}
+.cbtn .cd-bar{position:absolute;bottom:0;left:0;height:2px;background:var(--amber);transition:width 0.15s linear;}
+.battery-fill{height:7px;background:var(--bg2);border-radius:3px;overflow:hidden;margin:5px 0;border:1px solid var(--border);}
+.battery-level{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--green),var(--cyan));transition:width 0.5s;}
+#center-panel{display:flex;flex-direction:column;gap:10px;}
+#map-container{flex:1;background:var(--panel);border:1px solid var(--border);border-radius:6px;position:relative;overflow:hidden;min-height:300px;}
+#map-svg{width:100%;height:100%;display:block;}
+.map-title{position:absolute;top:8px;left:12px;font-family:var(--mono);font-size:9px;color:rgba(90,123,160,0.8);letter-spacing:2px;pointer-events:none;}
+#gauge-row{display:grid;grid-template-columns:1fr 185px 1fr;gap:10px;align-items:stretch;}
+.gauge-panel{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px;}
+.balance-meter{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px;}
+.freq-num{font-family:var(--mono);font-size:30px;text-align:center;color:var(--text-bright);line-height:1;margin-top:2px;}
+.freq-unit{font-family:var(--mono);font-size:10px;text-align:center;color:var(--text-dim);}
+.freq-status{font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;text-align:center;margin-top:3px;}
+.bal-row{display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:4px;font-family:var(--mono);}
+.bal-bar{height:9px;background:var(--bg3);border-radius:5px;overflow:visible;position:relative;margin:6px 0;border:1px solid var(--border);}
+.bal-bar-fill{position:absolute;top:0;bottom:0;border-radius:4px;transition:all 0.5s;}
+.bal-marker{position:absolute;top:-3px;width:2px;height:15px;background:var(--text-dim);left:50%;transform:translateX(-50%);}
+#right-panel{display:flex;flex-direction:column;gap:8px;overflow-y:auto;}
+.wx-card{background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:9px 11px;}
+.wx-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:7px;}
+.wx-stat{font-size:9px;color:var(--text-dim);font-family:var(--mono);}
+.wx-stat span{color:var(--text);display:block;font-size:12px;}
+.dem-card{background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:9px 11px;}
+.mini-bars{display:flex;gap:2px;align-items:flex-end;height:28px;margin-top:5px;}
+.mini-bar{flex:1;border-radius:1px 1px 0 0;transition:height 0.4s,background 0.4s;min-height:2px;}
+.ev-list{display:flex;flex-direction:column;gap:3px;max-height:150px;overflow-y:auto;}
+.ev{font-size:11px;padding:5px 7px;background:var(--bg3);border-left:2px solid var(--border);border-radius:0 3px 3px 0;font-family:var(--body);color:var(--text);animation:slideIn 0.3s ease;}
+.ev .t{font-family:var(--mono);color:var(--text-dim);font-size:9px;}
+.ev.warn{border-left-color:var(--amber);background:rgba(255,184,0,0.05);}
+.ev.danger{border-left-color:var(--red);background:rgba(255,61,61,0.05);}
+.ev.good{border-left-color:var(--green);background:rgba(0,255,136,0.05);}
+.ev.info{border-left-color:var(--blue);background:rgba(61,139,255,0.05);}
+@keyframes slideIn{from{opacity:0;transform:translateX(8px);}to{opacity:1;transform:translateX(0);}}
+.upg-item{display:flex;align-items:center;gap:7px;padding:7px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;cursor:pointer;transition:all 0.15s;margin-bottom:5px;}
+.upg-item:hover:not(.bought){border-color:var(--border2);}
+.upg-item.bought{opacity:0.45;cursor:default;}
+.upg-icon{font-size:18px;}
+.upg-info{flex:1;}
+.upg-name{font-size:12px;font-weight:500;color:var(--text-bright);font-family:var(--sans);letter-spacing:0.5px;}
+.upg-desc{font-size:9px;color:var(--text-dim);margin-top:1px;}
+.upg-cost{font-family:var(--mono);font-size:10px;color:var(--amber);flex-shrink:0;}
+#bottom-bar{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:9px 16px;display:flex;align-items:center;gap:14px;position:relative;}
+#bottom-bar::before{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--green),var(--cyan),transparent);}
+.score-disp{font-family:var(--mono);font-size:10px;color:var(--text-dim);}
+.score-disp span{color:var(--green);font-size:18px;display:block;}
+.env-meter{flex:1;}
+.env-lbl{font-family:var(--mono);font-size:9px;color:var(--text-dim);letter-spacing:2px;margin-bottom:2px;}
+.env-bar{height:5px;background:var(--bg3);border-radius:3px;overflow:hidden;border:1px solid var(--border);}
+.env-fill{height:100%;border-radius:2px;transition:width 1s;}
+.pulse-dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;margin-right:4px;animation:pulse 1.5s ease infinite;}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(0,255,136,0.4);}50%{opacity:0.7;box-shadow:0 0 0 4px rgba(0,255,136,0);}}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:500;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+.overlay.show{display:flex;}
+.ov-box{background:var(--panel);border:1px solid var(--border2);border-radius:8px;padding:28px 36px;max-width:460px;width:90%;text-align:center;position:relative;overflow:hidden;}
+.ov-box::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--red),var(--amber));}
+.ov-box.success::before{background:linear-gradient(90deg,var(--green),var(--cyan));}
+.ov-box.intro::before{background:linear-gradient(90deg,var(--blue),var(--cyan));}
+.ov-title{font-family:var(--sans);font-size:26px;font-weight:700;letter-spacing:4px;text-transform:uppercase;color:var(--text-bright);margin-bottom:6px;}
+.ov-title.red{color:var(--red);}.ov-title.green{color:var(--green);}.ov-title.cyan{color:var(--cyan);}
+.ov-sub{font-size:12px;color:var(--text-dim);margin-bottom:18px;line-height:1.6;}
+.ov-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;}
+.ov-stat{background:var(--bg3);border-radius:4px;padding:9px;border:1px solid var(--border);}
+.ov-stat .sl{font-family:var(--mono);font-size:9px;color:var(--text-dim);letter-spacing:2px;text-transform:uppercase;}
+.ov-stat .sv{font-family:var(--mono);font-size:18px;color:var(--text-bright);margin-top:3px;}
+.big-btn{padding:10px 28px;font-family:var(--sans);font-size:13px;font-weight:600;letter-spacing:3px;text-transform:uppercase;background:transparent;border:1px solid var(--cyan);color:var(--cyan);border-radius:4px;cursor:pointer;transition:all 0.2s;}
+.big-btn:hover{background:var(--blue-dim);box-shadow:0 0 20px rgba(0,229,255,0.2);}
+.intro-feat{text-align:left;margin:12px 0 18px;display:grid;gap:7px;}
+.intro-feat li{font-size:11px;color:var(--text);display:flex;gap:9px;align-items:flex-start;list-style:none;}
+.intro-feat li .ic{font-size:14px;flex-shrink:0;}
+.rtip{position:absolute;background:rgba(8,12,20,0.95);border:1px solid var(--border2);border-radius:4px;padding:7px 11px;pointer-events:none;z-index:50;min-width:130px;}
+.rtip h4{font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:1px;color:var(--cyan);margin-bottom:3px;}
+.rtip p{font-family:var(--mono);font-size:9px;color:var(--text-dim);line-height:1.7;}
+@keyframes alarmFlash{0%,100%{border-color:var(--border);}50%{border-color:var(--red);box-shadow:0 0 16px rgba(255,61,61,0.25);}}
+.alarming{animation:alarmFlash 0.5s ease infinite;}
+::-webkit-scrollbar{width:3px;}::-webkit-scrollbar-track{background:var(--bg2);}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+</style>
+</head>
+<body>
+
+<div class="overlay show" id="intro-screen">
+  <div class="ov-box intro">
+    <div class="ov-title cyan">BALANCE<br>THE GRID</div>
+    <div class="ov-sub" style="margin-top:6px">National Grid Control Room · UK<br>Morning Shift — 06:00 to 18:00</div>
+    <ul class="intro-feat">
+      <li><span class="ic">⚡</span><span>Keep frequency <b style="color:var(--text-bright)">49.8–50.2 Hz</b>. Below 48.5 or above 51.5 causes cascade failure.</span></li>
+      <li><span class="ic">🎛️</span><span><b style="color:var(--text-bright)">±Pulse buttons</b> give discrete MW steps. Each action triggers a <b style="color:var(--amber)">cooldown</b> — realistic ramp times prevent spamming.</span></li>
+      <li><span class="ic">🗺️</span><span>Live UK map (real GeoJSON regions). Hover for regional demand info.</span></li>
+      <li><span class="ic">💷</span><span>Earn revenue staying stable. Buy upgrades. Gas costs money and harms environment.</span></li>
+    </ul>
+    <button class="big-btn" onclick="startGame()">BEGIN SHIFT →</button>
+  </div>
+</div>
+
+<div class="overlay" id="fail-screen">
+  <div class="ov-box">
+    <div class="ov-title red">GRID FAILURE</div>
+    <div class="ov-sub" id="fail-reason">Frequency deviation caused cascade failure</div>
+    <div class="ov-stats">
+      <div class="ov-stat"><div class="sl">Score</div><div class="sv" id="fail-score">0</div></div>
+      <div class="ov-stat"><div class="sl">Time</div><div class="sv" id="fail-time">--:--</div></div>
+      <div class="ov-stat"><div class="sl">Balance</div><div class="sv" id="fail-balance">£0</div></div>
+      <div class="ov-stat"><div class="sl">Uptime</div><div class="sv" id="fail-uptime">0%</div></div>
+    </div>
+    <button class="big-btn" style="border-color:var(--red);color:var(--red);" onclick="resetGame()">RETRY ↺</button>
+  </div>
+</div>
+
+<div class="overlay" id="success-screen">
+  <div class="ov-box success">
+    <div class="ov-title green">SHIFT COMPLETE</div>
+    <div class="ov-sub">You balanced the national grid for 12 hours.</div>
+    <div class="ov-stats">
+      <div class="ov-stat"><div class="sl">Final Score</div><div class="sv" id="win-score">0</div></div>
+      <div class="ov-stat"><div class="sl">Balance</div><div class="sv" id="win-balance">£0</div></div>
+      <div class="ov-stat"><div class="sl">Uptime</div><div class="sv" id="win-uptime">0%</div></div>
+      <div class="ov-stat"><div class="sl">Environment</div><div class="sv" id="win-env">0</div></div>
+    </div>
+    <button class="big-btn" onclick="resetGame()">NEW SHIFT →</button>
+  </div>
+</div>
+
+<div id="app">
+  <div id="header">
+    <div>
+      <div class="hdr-title">GRID<span>CTRL</span></div>
+      <div class="hdr-sub">NATIONAL GRID OPERATIONS · UK</div>
+    </div>
+    <div class="stat-strip">
+      <div class="stat-item"><div class="lbl">Score</div><div class="val" id="hdr-score">0</div></div>
+      <div class="stat-item"><div class="lbl">Balance</div><div class="val" id="hdr-balance">£10,000</div></div>
+      <div class="stat-item"><div class="lbl">Frequency</div><div class="val" id="hdr-freq">50.00 Hz</div></div>
+      <div class="stat-item"><div class="lbl">Net MW</div><div class="val" id="hdr-net">0 MW</div></div>
+      <div class="stat-item"><div class="lbl">Env.</div><div class="val" id="hdr-env">100</div></div>
+    </div>
+    <div class="clock">
+      <div class="clock-time" id="hdr-clock">06:00</div>
+      <div class="clock-lbl">ENDS 18:00</div>
+      <div id="shift-prog"><div id="shift-prog-fill" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div id="main">
+    <!-- LEFT -->
+    <div id="left-panel" class="panel">
+      <div class="ph cyan">Generation Dispatch</div>
+
+      <div class="gen-src" id="src-gas">
+        <div class="gen-top">
+          <div class="gen-icon" style="background:rgba(255,100,60,0.15)">🔥</div>
+          <span class="gen-name">GAS CCGT</span>
+          <span class="gen-mw" id="gas-mw">200 MW</span>
+        </div>
+        <div class="gen-bar"><div class="gen-bar-fill" id="gas-bar" style="width:40%;background:linear-gradient(90deg,#ff6432,#ffb800)"></div></div>
+        <input type="range" class="gen-slider" id="gas-slider" min="0" max="500" value="200" oninput="onGasSlider()">
+        <div class="gen-meta"><span>0</span><span id="gas-meta">£3.2/MWh</span><span>500</span></div>
+      </div>
+
+      <div class="gen-src" id="src-nuke">
+        <div class="gen-top">
+          <div class="gen-icon" style="background:rgba(0,255,100,0.1)">⚛️</div>
+          <span class="gen-name">NUCLEAR</span>
+          <span class="gen-mw" id="nuke-mw">400 MW</span>
+        </div>
+        <div class="gen-bar"><div class="gen-bar-fill" id="nuke-bar" style="width:50%;background:linear-gradient(90deg,#00c853,#00e5ff)"></div></div>
+        <div class="pulse-row">
+          <button class="pbtn down" id="nuke-dn" onclick="pulse('nuke',-50)">−50 MW<div class="cd-bar" id="nuke-cd-bar" style="width:0%"></div></button>
+          <span class="cd-lbl" id="nuke-cd-lbl"></span>
+          <button class="pbtn up" id="nuke-up" onclick="pulse('nuke',50)">+50 MW<div class="cd-bar" id="nuke-cd-bar2" style="width:0%"></div></button>
+        </div>
+        <div class="gen-meta" style="margin-top:3px"><span>300</span><span>Slow ramp · £1.8/MWh</span><span>800</span></div>
+      </div>
+
+      <div class="gen-src" id="src-solar">
+        <div class="gen-top">
+          <div class="gen-icon" style="background:rgba(255,220,0,0.15)">☀️</div>
+          <span class="gen-name">SOLAR</span>
+          <span class="gen-mw zero" id="solar-mw">0 MW</span>
+        </div>
+        <div class="gen-bar"><div class="gen-bar-fill" id="solar-bar" style="width:0%;background:linear-gradient(90deg,#ffd600,#ff9800)"></div></div>
+        <div class="gen-meta"><span style="color:var(--text-dim)">Weather dependent</span><span id="solar-fcast" style="color:var(--amber)">Sunrise ~07:30</span></div>
+      </div>
+
+      <div class="gen-src" id="src-wind">
+        <div class="gen-top">
+          <div class="gen-icon" style="background:rgba(0,200,255,0.1)">💨</div>
+          <span class="gen-name">WIND</span>
+          <span class="gen-mw" id="wind-mw">80 MW</span>
+        </div>
+        <div class="gen-bar"><div class="gen-bar-fill" id="wind-bar" style="width:16%;background:linear-gradient(90deg,#00b4d8,#00e5ff)"></div></div>
+        <div class="gen-meta"><span style="color:var(--text-dim)">Variable output</span><span id="wind-spd" style="color:var(--cyan)">8 m/s</span></div>
+      </div>
+
+      <div class="gen-src" id="src-hydro">
+        <div class="gen-top">
+          <div class="gen-icon" style="background:rgba(0,100,255,0.15)">💧</div>
+          <span class="gen-name">HYDRO</span>
+          <span class="gen-mw zero" id="hydro-mw">0 MW</span>
+        </div>
+        <div class="gen-bar"><div class="gen-bar-fill" id="hydro-bar" style="width:0%;background:linear-gradient(90deg,#0070ff,#00e5ff)"></div></div>
+        <div class="pulse-row">
+          <button class="pbtn down" id="hydro-dn" onclick="pulse('hydro',-40)">−40 MW<div class="cd-bar" id="hydro-cd-bar" style="width:0%"></div></button>
+          <span class="cd-lbl" id="hydro-cd-lbl"></span>
+          <button class="pbtn up" id="hydro-up" onclick="pulse('hydro',40)">+40 MW<div class="cd-bar" id="hydro-cd-bar2" style="width:0%"></div></button>
+        </div>
+        <div class="gen-meta" style="margin-top:3px"><span>0</span><span>Fast response</span><span>200</span></div>
+      </div>
+
+      <div class="gen-src" id="src-battery">
+        <div class="gen-top">
+          <div class="gen-icon" style="background:rgba(180,100,255,0.15)">🔋</div>
+          <span class="gen-name">BATTERY</span>
+          <span class="gen-mw" id="batt-mw">0 MW</span>
+        </div>
+        <div class="battery-fill"><div class="battery-level" id="batt-level" style="width:50%"></div></div>
+        <div class="gen-meta"><span id="batt-kwh">300/600 MWh</span><span id="batt-cd-lbl" style="color:var(--amber)"></span></div>
+        <div class="btn-group">
+          <button class="cbtn" id="btn-dis" onclick="setBatt('discharge')">Discharge<div class="cd-bar" id="batt-cd-bar" style="width:0%"></div></button>
+          <button class="cbtn" id="btn-chg" onclick="setBatt('charge')">Charge</button>
+          <button class="cbtn active" id="btn-boff" onclick="setBatt('off')">Off</button>
+        </div>
+        <div class="gen-meta" style="margin-top:3px" id="batt-status-lbl">Standby</div>
+      </div>
+    </div>
+
+    <!-- CENTER -->
+    <div id="center-panel">
+      <div id="map-container">
+        <div class="map-title">UK NATIONAL GRID · LIVE</div>
+        <svg id="map-svg"></svg>
+        <div id="rtip" class="rtip" style="display:none"></div>
+      </div>
+
+      <div id="gauge-row">
+        <div class="balance-meter">
+          <div class="ph amber" style="margin-bottom:7px;font-size:9px;">Power Balance</div>
+          <div class="bal-row"><span style="color:var(--green)">GEN</span><span id="bal-gen" style="color:var(--green);font-size:13px;">0 MW</span></div>
+          <div class="bal-row"><span style="color:var(--red)">DEM</span><span id="bal-dem" style="color:var(--red);font-size:13px;">0 MW</span></div>
+          <div class="bal-bar"><div class="bal-marker"></div><div class="bal-bar-fill" id="bal-fill"></div></div>
+          <div class="bal-row" style="margin:0"><span>Net</span><span id="bal-net" style="font-size:13px;">0 MW</span></div>
+          <div style="font-size:9px;color:var(--text-dim);margin-top:5px;font-family:var(--mono);line-height:1.9">
+            Gas: <span id="gas-cost" style="color:var(--amber)">£640/hr</span><br>
+            IC: <span id="ic-cost" style="color:var(--amber)">£0/hr</span>
+          </div>
+        </div>
+
+        <div class="gauge-panel">
+          <div class="ph" style="margin-bottom:4px;font-size:9px;justify-content:center;">Grid Frequency</div>
+          <svg width="160" height="96" viewBox="0 0 160 96" style="display:block;margin:0 auto">
+            <defs>
+              <linearGradient id="gaugeG" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#ff3d3d"/>
+                <stop offset="22%" stop-color="#ffb800"/>
+                <stop offset="44%" stop-color="#00ff88"/>
+                <stop offset="56%" stop-color="#00ff88"/>
+                <stop offset="78%" stop-color="#ffb800"/>
+                <stop offset="100%" stop-color="#ff3d3d"/>
+              </linearGradient>
+            </defs>
+            <path d="M15 85 A65 65 0 0 1 145 85" fill="none" stroke="#1a2535" stroke-width="11" stroke-linecap="round"/>
+            <path d="M15 85 A65 65 0 0 1 145 85" fill="none" stroke="url(#gaugeG)" stroke-width="9" stroke-linecap="round" opacity="0.85"/>
+            <text x="9" y="93" fill="#5a7ba0" font-size="8" font-family="Share Tech Mono,monospace">49</text>
+            <text x="76" y="18" fill="#5a7ba0" font-size="8" font-family="Share Tech Mono,monospace" text-anchor="middle">50</text>
+            <text x="141" y="93" fill="#5a7ba0" font-size="8" font-family="Share Tech Mono,monospace">51</text>
+            <line id="needle" x1="80" y1="85" x2="80" y2="28" stroke="white" stroke-width="2" stroke-linecap="round" transform="rotate(0,80,85)"/>
+            <circle cx="80" cy="85" r="5" fill="#0d1420" stroke="white" stroke-width="1.5"/>
+            <circle cx="80" cy="85" r="2" fill="white"/>
+          </svg>
+          <div class="freq-num" id="freq-display">50.00</div>
+          <div class="freq-unit">Hz</div>
+          <div class="freq-status" id="freq-status" style="color:var(--green)">STABLE</div>
+        </div>
+
+        <div class="balance-meter">
+          <div class="ph purple" style="margin-bottom:7px;font-size:9px;">Interconnect</div>
+          <div class="btn-group" style="margin-bottom:5px">
+            <button class="cbtn" id="btn-imp" onclick="setIC('import')">Import<div class="cd-bar" id="ic-cd-bar" style="width:0%"></div></button>
+            <button class="cbtn" id="btn-exp" onclick="setIC('export')">Export</button>
+            <button class="cbtn active" id="btn-icoff" onclick="setIC('off')">Off</button>
+          </div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);min-height:16px" id="ic-status">Interconnect offline</div>
+          <div style="margin-top:10px">
+            <div class="ph amber" style="margin-bottom:5px;font-size:9px;">Demand Mgmt</div>
+            <div class="btn-group">
+              <button class="cbtn" id="btn-curt" onclick="toggleCurtail()">Curtail Load<div class="cd-bar" id="curt-cd-bar" style="width:0%"></div></button>
+            </div>
+            <div style="font-size:9px;color:var(--text-dim);margin-top:3px;font-family:var(--mono)" id="curt-lbl">−0 MW demand</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div id="right-panel" class="panel">
+      <div class="ph green">Conditions</div>
+      <div class="wx-card">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="font-size:26px" id="wx-icon">🌙</div>
+          <div>
+            <div style="font-family:var(--sans);font-size:15px;font-weight:600;color:var(--text-bright)" id="wx-title">Pre-dawn</div>
+            <div style="font-size:11px;color:var(--text);margin-top:1px" id="wx-desc">Clear night, low demand</div>
+          </div>
+        </div>
+        <div class="wx-grid">
+          <div class="wx-stat">Wind<span id="wx-wind">8 m/s</span></div>
+          <div class="wx-stat">Cloud<span id="wx-cloud">10%</span></div>
+          <div class="wx-stat">Solar factor<span id="wx-solar">0%</span></div>
+          <div class="wx-stat">Temp<span id="wx-temp">6°C</span></div>
+        </div>
+      </div>
+      <div class="dem-card">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;">
+          <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim)">DEMAND</span>
+          <span style="font-family:var(--mono);font-size:16px;color:var(--text-bright)" id="demand-disp">800 MW</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:2px;">
+          <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim)">TREND</span>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--text-dim)" id="demand-trend">→ Steady</span>
+        </div>
+        <div class="mini-bars" id="demand-hist"></div>
+      </div>
+      <div class="ph" style="margin:4px 0 5px">Event Log</div>
+      <div class="ev-list" id="ev-list"></div>
+      <div class="ph amber" style="margin-top:8px">Upgrades</div>
+      <div id="upg-list"></div>
+    </div>
+  </div>
+
+  <div id="bottom-bar">
+    <div class="score-disp">SCORE<span id="bot-score">0</span></div>
+    <div class="env-meter">
+      <div class="env-lbl">Environmental Rating</div>
+      <div class="env-bar"><div class="env-fill" id="env-fill" style="width:100%;background:linear-gradient(90deg,var(--green),var(--cyan))"></div></div>
+    </div>
+    <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);text-align:right">
+      <span class="pulse-dot"></span>LIVE · UK NATIONAL GRID<br>
+      <span id="stab-pct" style="color:var(--green)">STABLE</span>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════
+// STATE
+// ═══════════════════════
+const G={
+  freq:50.0,balance:10000,envScore:100,score:0,minutes:360,
+  bat:300,maxBat:600,batMode:'off',
+  ic:'off',curtail:false,
+  demand:800,prevDemand:800,
+  gas:200,nuke:400,solar:0,wind:80,hydro:0,
+  windSpeed:8,cloudCover:10,weatherName:'predawn',
+  running:false,tick:0,stableTicks:0,totalTicks:0,demHist:[],
+  upgrades:{},
+  cd:{nuke:0,hydro:0,bat:0,ic:0,curt:0},
+  demandSurge:0,gasTripUntil:0,
+};
+// Cooldowns: ticks at 200ms each
+const CD_TICKS={nuke:40,hydro:14,bat:28,ic:20,curt:30};
+
+// ═══════════════════════
+// UK REGIONS — carefully interlocking polygons that tile to form the full GB silhouette
+// Shared boundary vertices are exact matches so there are no gaps
+// ═══════════════════════
+const REGIONS=[
+  // Scotland: full northern body including highlands & NE coast
+  {id:'scotland',name:'Scotland',demand:380,type:'wind/hydro',
+   coords:[
+     [-2.0,55.8],[-1.6,55.9],[-1.2,55.95],[-0.5,56.0],[0.0,56.2],[-0.2,56.8],[-0.8,57.2],
+     [-1.5,57.7],[-2.2,57.8],[-3.0,58.0],[-3.5,58.4],[-3.7,58.65],[-5.0,58.65],
+     [-5.7,58.2],[-6.2,57.6],[-5.8,57.1],[-5.2,56.8],[-5.5,56.4],[-4.8,56.2],
+     [-4.0,56.0],[-3.2,55.95],[-2.5,55.85],[-2.0,55.8]
+   ]},
+  // NE England
+  {id:'ne_eng',name:'NE England',demand:120,type:'industrial',
+   coords:[
+     [-2.0,55.8],[-1.2,55.95],[-0.5,56.0],[-0.3,55.5],[-0.5,55.0],
+     [-1.0,54.8],[-1.5,54.7],[-2.0,54.7],[-2.5,54.85],[-2.3,55.2],[-2.0,55.8]
+   ]},
+  // NW England (incl. Cumbria, Lancashire, Merseyside)
+  {id:'nw_eng',name:'NW England',demand:220,type:'urban',
+   coords:[
+     [-2.0,54.7],[-1.5,54.7],[-1.0,54.8],[-0.5,55.0],[-0.5,54.5],[-0.8,54.0],
+     [-1.1,53.75],[-2.0,53.7],[-2.9,53.35],[-3.2,53.35],[-3.4,53.55],
+     [-3.0,54.0],[-2.7,54.4],[-2.5,54.85],[-2.0,54.7]
+   ]},
+  // Yorkshire & Humber
+  {id:'yorks',name:'Yorkshire',demand:160,type:'industrial',
+   coords:[
+     [-1.0,54.8],[-0.5,55.0],[-0.3,55.5],[-0.5,56.0],[0.0,56.2],[0.2,55.5],
+     [0.1,54.8],[0.1,54.2],[0.1,53.75],[-0.5,53.5],[-0.8,53.35],[-1.1,53.35],
+     [-1.1,53.75],[-0.8,54.0],[-0.5,54.5],[-0.5,55.0],[-1.0,54.8]
+   ]},
+  // Wales — pronounced westward bulge
+  {id:'wales',name:'Wales',demand:120,type:'hydro',
+   coords:[
+     [-2.9,53.35],[-2.0,53.7],[-2.0,53.35],[-2.0,53.0],[-2.5,52.5],
+     [-2.8,52.1],[-3.0,51.7],[-4.0,51.5],[-5.0,51.6],[-5.3,51.9],
+     [-4.8,52.4],[-4.1,52.9],[-3.4,53.2],[-3.2,53.35],[-2.9,53.35]
+   ]},
+  // East Midlands
+  {id:'em_eng',name:'East Midlands',demand:150,type:'mixed',
+   coords:[
+     [-1.1,53.35],[-0.8,53.35],[-0.5,53.5],[0.1,53.75],[0.4,53.2],
+     [0.2,52.6],[-0.2,52.2],[-0.8,52.0],[-1.5,52.1],[-1.8,52.5],
+     [-1.5,53.0],[-1.1,53.35]
+   ]},
+  // West Midlands
+  {id:'wm_eng',name:'West Midlands',demand:200,type:'urban',
+   coords:[
+     [-2.0,53.7],[-1.1,53.75],[-1.1,53.35],[-1.5,53.0],[-1.8,52.5],
+     [-2.2,52.2],[-2.7,52.4],[-2.6,52.9],[-2.5,53.35],[-2.0,53.35],[-2.0,53.7]
+   ]},
+  // East of England (Norfolk, Suffolk, Cambs, Essex)
+  {id:'east_eng',name:'East England',demand:140,type:'solar',
+   coords:[
+     [0.1,53.75],[0.4,53.2],[1.0,52.9],[1.8,52.5],[1.75,52.0],
+     [1.5,51.6],[0.5,51.6],[0.1,51.75],[-0.2,52.2],[0.2,52.6],
+     [0.4,53.2],[0.1,53.75]
+   ]},
+  // Greater London (small dense region)
+  {id:'london',name:'London',demand:380,type:'urban',
+   coords:[
+     [-0.5,51.7],[0.1,51.75],[0.5,51.6],[0.3,51.35],[0.1,51.3],
+     [-0.2,51.3],[-0.55,51.4],[-0.5,51.7]
+   ]},
+  // South East (Kent, Surrey, Sussex, Hants)
+  {id:'se_eng',name:'South East',demand:210,type:'solar',
+   coords:[
+     [-0.5,51.7],[-0.55,51.4],[-0.2,51.3],[0.1,51.3],[0.3,51.35],
+     [0.5,51.6],[1.5,51.6],[1.75,51.2],[1.4,51.1],[0.8,50.75],
+     [0.2,50.75],[-0.4,50.75],[-1.3,50.7],[-1.8,50.75],[-2.0,51.0],
+     [-1.5,51.4],[-1.0,51.5],[-0.5,51.7]
+   ]},
+  // South West (Devon, Cornwall, Somerset, Dorset, Glos, Wilts)
+  {id:'sw_eng',name:'South West',demand:150,type:'solar',
+   coords:[
+     [-2.0,51.0],[-1.8,50.75],[-2.0,50.6],[-2.5,50.5],[-3.4,50.2],
+     [-4.2,50.1],[-5.0,50.05],[-5.7,50.1],[-5.7,50.5],[-5.3,51.0],
+     [-4.5,51.5],[-3.0,51.7],[-2.8,52.1],[-2.5,52.5],[-2.0,53.0],
+     [-2.0,53.35],[-2.5,53.35],[-2.6,52.9],[-2.7,52.4],[-2.2,52.2],
+     [-1.8,52.5],[-1.5,52.1],[-0.8,52.0],[-0.5,51.75],[0.1,51.75],
+     [0.5,51.6],[1.5,51.6],[1.75,52.0],[1.8,52.5],[1.0,52.9],[0.4,53.2],
+     [0.2,52.6],[-0.2,52.2],[-0.8,52.0],[-1.5,52.1],[-1.8,52.5],
+     [-2.2,52.2],[-2.0,51.0]
+   ]},
+];
+
+// Bounding box that covers all of Great Britain for projection fitting
+const UK_BBOX={type:'Feature',geometry:{type:'Polygon',coordinates:[[
+  [-6.5,49.8],[-6.5,58.8],[2.0,58.8],[2.0,49.8],[-6.5,49.8]
+]]}};
+
+const geojson={type:'FeatureCollection',features:REGIONS.map(r=>({
+  type:'Feature',
+  properties:{id:r.id,name:r.name,demand:r.demand,type:r.type},
+  geometry:{type:'Polygon',coordinates:[r.coords]}
+}))};
+
+// Full GB outline silhouette for the background shape
+const GB_OUTLINE={type:'Feature',geometry:{type:'Polygon',coordinates:[[
+  [-2.0,55.8],[-1.2,55.95],[-0.5,56.0],[0.0,56.2],[0.2,55.5],[0.1,54.8],
+  [0.1,54.2],[0.1,53.75],[0.4,53.2],[1.0,52.9],[1.8,52.5],[1.75,52.0],
+  [1.75,51.2],[1.5,51.6],[1.4,51.1],[0.8,50.75],[0.2,50.75],[-0.4,50.75],
+  [-1.3,50.7],[-1.8,50.75],[-2.0,50.6],[-2.5,50.5],[-3.4,50.2],
+  [-5.0,50.05],[-5.7,50.1],[-5.7,50.5],[-5.3,51.0],[-4.5,51.5],
+  [-5.0,51.6],[-5.3,51.9],[-4.8,52.4],[-4.1,52.9],[-3.4,53.2],
+  [-3.2,53.35],[-3.4,53.55],[-3.0,54.0],[-2.7,54.4],[-2.5,54.85],
+  [-2.0,54.7],[-1.5,54.7],[-1.0,54.8],[-0.5,55.0],[-0.3,55.5],
+  [-0.8,57.2],[-1.5,57.7],[-2.2,57.8],[-3.0,58.0],[-3.7,58.65],
+  [-5.0,58.65],[-5.7,58.2],[-6.2,57.6],[-5.8,57.1],[-5.2,56.8],
+  [-5.5,56.4],[-4.8,56.2],[-4.0,56.0],[-3.2,55.95],[-2.5,55.85],[-2.0,55.8]
+]]}};
+
+const PLINES=[[0,1],[0,2],[1,2],[1,3],[2,3],[2,4],[2,6],[3,5],[3,7],[4,5],[4,6],[5,6],[5,7],[6,8],[7,8],[7,9],[8,9],[8,10],[9,10]];
+
+let proj,pg;
+
+function initMap(){
+  const svg=d3.select('#map-svg');
+  const cont=document.getElementById('map-container');
+  const W=cont.clientWidth||400,H=cont.clientHeight||320;
+  svg.attr('viewBox',`0 0 ${W} ${H}`);
+  svg.append('rect').attr('width',W).attr('height',H).attr('fill','#050c18');
+  for(let x=0;x<W;x+=24) svg.append('line').attr('x1',x).attr('y1',0).attr('x2',x).attr('y2',H).attr('stroke','rgba(61,139,255,0.04)').attr('stroke-width',0.5);
+  for(let y=0;y<H;y+=24) svg.append('line').attr('x1',0).attr('y1',y).attr('x2',W).attr('y2',y).attr('stroke','rgba(61,139,255,0.04)').attr('stroke-width',0.5);
+  // Use bounding box feature to set projection so full GB is visible with padding
+  const PAD=20;
+  proj=d3.geoMercator().fitExtent([[PAD,PAD],[W-PAD,H-PAD]],UK_BBOX);
+  pg=d3.geoPath().projection(proj);
+  // Draw GB silhouette glow behind regions
+  svg.append('path').datum(GB_OUTLINE).attr('d',pg).attr('id','gb-outline')
+    .attr('fill','rgba(20,40,80,0.35)').attr('stroke','rgba(61,139,255,0.12)').attr('stroke-width',8)
+    .attr('stroke-linejoin','round');
+  // Power lines
+  const lg=svg.append('g').attr('id','plines');
+  PLINES.forEach(([a,b],i)=>{
+    const ca=REGIONS[a].coords,cb=REGIONS[b].coords;
+    const ax=ca.reduce((s,c)=>s+c[0],0)/ca.length,ay=ca.reduce((s,c)=>s+c[1],0)/ca.length;
+    const bx=cb.reduce((s,c)=>s+c[0],0)/cb.length,by=cb.reduce((s,c)=>s+c[1],0)/cb.length;
+    const [x1,y1]=proj([ax,ay]),[x2,y2]=proj([bx,by]);
+    lg.append('line').attr('x1',x1).attr('y1',y1).attr('x2',x2).attr('y2',y2)
+      .attr('stroke','rgba(61,139,255,0.22)').attr('stroke-width',0.7).attr('stroke-dasharray','3 3').attr('class','pline').attr('id','pl-'+i);
+  });
+  // Regions
+  const rg=svg.append('g').attr('id','regions');
+  const tip=document.getElementById('rtip');
+  REGIONS.forEach((r,i)=>{
+    const feat=geojson.features[i];
+    const g=rg.append('g').attr('id','reg-'+r.id).style('cursor','pointer');
+    g.append('path').datum(feat).attr('d',pg).attr('fill','#0d1e38').attr('stroke','rgba(61,139,255,0.38)').attr('stroke-width',0.8).attr('class','reg-path');
+    const [cx,cy]=pg.centroid(feat);
+    if(!isNaN(cx)){
+      g.append('text').attr('x',cx).attr('y',cy+1).attr('text-anchor','middle').attr('dominant-baseline','central')
+        .attr('font-size',r.id==='london'?'6':r.id==='scotland'?'9':'7').attr('font-family','Share Tech Mono,monospace').attr('fill','rgba(200,222,255,0.4)').attr('pointer-events','none').text(r.name);
+      g.append('circle').attr('cx',cx).attr('cy',cy).attr('r',r.id==='london'?4:2.5).attr('fill','rgba(0,229,255,0.5)').attr('class','city-dot').attr('pointer-events','none');
+    }
+    g.on('mouseover',function(ev){
+      d3.select(this).select('.reg-path').attr('stroke','rgba(0,229,255,0.7)').attr('stroke-width',1.5);
+      tip.style.display='block';
+      tip.innerHTML=`<h4>${r.name}</h4><p>Demand: ~${r.demand} MW<br>Type: ${r.type}<br>${G.freq>=49.5?'✅ Supplied':'⚠️ Stressed'}</p>`;
+      const br=document.getElementById('map-container').getBoundingClientRect();
+      tip.style.left=(ev.clientX-br.left+12)+'px';tip.style.top=(ev.clientY-br.top-50)+'px';
+    }).on('mousemove',function(ev){
+      const br=document.getElementById('map-container').getBoundingClientRect();
+      tip.style.left=(ev.clientX-br.left+12)+'px';tip.style.top=(ev.clientY-br.top-50)+'px';
+    }).on('mouseout',function(){
+      d3.select(this).select('.reg-path').attr('stroke','rgba(61,139,255,0.38)').attr('stroke-width',0.8);
+      tip.style.display='none';
+    });
+  });
+}
+
+function updateMap(){
+  const stable=G.freq>=49.5&&G.freq<=50.5,crit=G.freq<49.2||G.freq>50.8;
+  const t=Date.now();
+  const typeColor={wind:'#0a1e2c',urban:'#0d1c2e',hydro:'#0a2020',industrial:'#181808',solar:'#181a08',mixed:'#0f1820'};
+  REGIONS.forEach((r,i)=>{
+    const g=d3.select('#reg-'+r.id);
+    const p=0.35+0.3*Math.sin(t/1300+i*0.7);
+    g.select('.reg-path').attr('fill',crit?'#2a0808':!stable?'#261608':(typeColor[r.type]||'#0d1e38'));
+    g.select('.city-dot').attr('fill',stable?`rgba(0,229,255,${p})`:`rgba(255,61,61,${p})`).attr('r',r.id==='london'?4:2.5);
+  });
+  d3.selectAll('.pline').each(function(_,i){
+    const op=stable?0.12+0.1*Math.sin(t/800+i):0.05+0.05*Math.random();
+    d3.select(this).attr('stroke-opacity',op).attr('stroke',stable?'#3d8bff':'#ffb800');
+  });
+}
+
+// ═══════════════════════
+// PHYSICS
+// ═══════════════════════
+function getSolar(){
+  const m=G.minutes;
+  if(m<450||m>1050) return 0;
+  const raw=Math.max(0,1-Math.pow((m-750)/300,2));
+  const cld=1-(G.cloudCover/100)*0.88;
+  return Math.round(raw*(G.upgrades.solarBoost?500:350)*cld);
+}
+function getWind(){
+  const base=G.windSpeed*5.5+18*Math.sin(G.minutes/130);
+  return Math.round(Math.max(0,Math.min(G.upgrades.windFarm?600:400,base+(Math.random()-0.5)*G.windSpeed*2.5)));
+}
+function getDemand(){
+  const m=G.minutes;
+  let base;
+  if(m<420) base=670;
+  else if(m<480) base=670+(m-420)*2.2;
+  else if(m<600) base=800;
+  else if(m<720) base=840;
+  else if(m<840) base=800;
+  else if(m<960) base=800+(m-840)*2.5;
+  else base=1000-(m-960)*1.2;
+  return Math.round(Math.max(400,base+G.demandSurge+(Math.random()-0.5)*22+(G.curtail?-130:0)));
+}
+function computeFreq(gen,dem){
+  const imb=gen-dem;
+  const sens=G.upgrades.smartGrid?0.0007:0.0011;
+  return Math.max(47.5,Math.min(52.5,G.freq+imb*sens+(50-G.freq)*0.055));
+}
+
+// ═══════════════════════
+// CONTROLS
+// ═══════════════════════
+function pulse(src,delta){
+  if(G.cd[src]>0) return;
+  const lims={nuke:[300,800],hydro:[0,G.upgrades.hydroPump?400:200]};
+  const [mn,mx]=lims[src];
+  G[src]=Math.max(mn,Math.min(mx,G[src]+delta));
+  G.cd[src]=CD_TICKS[src];
+  addEv(`${delta>0?'▲':'▼'} ${src.toUpperCase()} ${delta>0?'+':''}${delta} MW → ${G[src]} MW`,'info');
+}
+
+function onGasSlider(){
+  G.gas=parseInt(document.getElementById('gas-slider').value);
+}
+
+function setBatt(mode){
+  if(mode!=='off'&&G.cd.bat>0) return;
+  const prev=G.batMode;
+  G.batMode=mode;
+  if(mode!=='off'&&prev!==mode){G.cd.bat=CD_TICKS.bat;addEv(`🔋 Battery ${mode} — cooldown active`,'info');}
+  ['btn-dis','btn-chg','btn-boff'].forEach(id=>document.getElementById(id).classList.remove('active','gr','am'));
+  const id=mode==='off'?'btn-boff':mode==='discharge'?'btn-dis':'btn-chg';
+  document.getElementById(id).classList.add('active',mode==='discharge'?'gr':mode==='charge'?'am':'');
+}
+
+function setIC(mode){
+  if(mode!=='off'&&G.cd.ic>0) return;
+  if(mode!==G.ic&&mode!=='off') G.cd.ic=CD_TICKS.ic;
+  G.ic=mode;
+  ['btn-imp','btn-exp','btn-icoff'].forEach(id=>document.getElementById(id).classList.remove('active','gr','am'));
+  const id=mode==='off'?'btn-icoff':mode==='import'?'btn-imp':'btn-exp';
+  document.getElementById(id).classList.add('active',mode==='import'?'am':mode==='export'?'gr':'');
+  const labels={import:'Importing 200 MW · £2,800/hr',export:'Exporting 150 MW · +£400/hr',off:'Interconnect offline'};
+  document.getElementById('ic-status').textContent=labels[mode];
+  if(mode!=='off') addEv('🔌 '+labels[mode],'info');
+}
+
+let _curtailOn=false;
+function toggleCurtail(){
+  if(G.cd.curt>0) return;
+  _curtailOn=!_curtailOn;
+  G.curtail=_curtailOn;
+  G.cd.curt=CD_TICKS.curt;
+  document.getElementById('btn-curt').classList.toggle('active',_curtailOn);
+  document.getElementById('btn-curt').classList.toggle('am',_curtailOn);
+  document.getElementById('curt-lbl').textContent=_curtailOn?'−130 MW demand active':'−0 MW demand';
+  addEv(_curtailOn?'📉 Curtailment: −130 MW demand':'📈 Curtailment deactivated',_curtailOn?'warn':'info');
+}
+
+// ═══════════════════════
+// EVENTS
+// ═══════════════════════
+const EVENTS=[
+  {min:420,msg:'🌅 Sunrise — solar output rising',type:'good',fx(){G.weatherName='sunny';}},
+  {min:465,msg:'🌬️ Winds strengthening — output rising',type:'info',fx(){G.windSpeed=14;}},
+  {min:510,msg:'☁️ Cloud bank — solar drops 75%',type:'warn',fx(){G.cloudCover=78;}},
+  {min:570,msg:'🏭 Morning industrial peak +180 MW',type:'warn',fx(){G.demandSurge=180;}},
+  {min:630,msg:'☀️ Skies clearing — solar restored',type:'good',fx(){G.cloudCover=12;}},
+  {min:660,msg:'⚠️ Gas turbine tripped! Offline 40 min',type:'danger',fx(){G.gasTripUntil=G.minutes+40;}},
+  {min:720,msg:'💨 Wind drops to 4 m/s',type:'warn',fx(){G.windSpeed=4;}},
+  {min:780,msg:'✅ Gas turbine back online',type:'good',fx(){G.gasTripUntil=0;G.demandSurge=0;}},
+  {min:900,msg:'🌆 Evening surge +250 MW!',type:'danger',fx(){G.demandSurge=250;G.windSpeed=11;}},
+  {min:960,msg:'🌙 Solar offline — sunset',type:'info',fx(){G.weatherName='night';}},
+  {min:1020,msg:'📉 Evening demand easing',type:'good',fx(){G.demandSurge=60;}},
+];
+EVENTS.forEach(e=>e.fired=false);
+
+function checkEvents(){
+  EVENTS.forEach(ev=>{if(!ev.fired&&G.minutes>=ev.min){ev.fired=true;ev.fx();addEv(ev.msg,ev.type);}});
+}
+function addEv(msg,type='info'){
+  const l=document.getElementById('ev-list');
+  const d=document.createElement('div');d.className='ev '+type;
+  d.innerHTML=`<span class="t">${fmt(G.minutes)}</span> ${msg}`;
+  l.insertBefore(d,l.firstChild);
+  while(l.children.length>14) l.removeChild(l.lastChild);
+}
+
+// ═══════════════════════
+// UPGRADES
+// ═══════════════════════
+const UPGRADES=[
+  {id:'extraGas',name:'Peaker Plant',desc:'Gas max 500→750 MW',cost:3000,icon:'🔥',fx(){document.getElementById('gas-slider').max=750;}},
+  {id:'bigBattery',name:'Grid Battery+',desc:'Storage 600→1200 MWh',cost:4000,icon:'🔋',fx(){G.maxBat=1200;}},
+  {id:'windFarm',name:'Offshore Wind',desc:'Wind cap +50%',cost:5000,icon:'💨',fx(){}},
+  {id:'smartGrid',name:'Smart Grid AI',desc:'Frequency stabiliser',cost:3500,icon:'🤖',fx(){}},
+  {id:'solarBoost',name:'Solar Farm+',desc:'Solar cap 350→500 MW',cost:2500,icon:'☀️',fx(){}},
+  {id:'hydroPump',name:'Pumped Hydro+',desc:'Hydro max 200→400 MW',cost:4500,icon:'💧',fx(){}},
+];
+function renderUpgrades(){
+  const c=document.getElementById('upg-list');c.innerHTML='';
+  UPGRADES.forEach(u=>{
+    const b=G.upgrades[u.id];
+    const d=document.createElement('div');d.className='upg-item'+(b?' bought':'');
+    d.innerHTML=`<span class="upg-icon">${u.icon}</span><div class="upg-info"><div class="upg-name">${u.name}</div><div class="upg-desc">${b?'✅ Installed':u.desc}</div></div><span class="upg-cost">${b?'—':'£'+u.cost.toLocaleString()}</span>`;
+    if(!b) d.onclick=()=>buyUpgrade(u);
+    c.appendChild(d);
+  });
+}
+function buyUpgrade(u){
+  if(G.upgrades[u.id]||G.balance<u.cost){if(G.balance<u.cost)addEv('💷 Not enough funds for '+u.name,'warn');return;}
+  G.balance-=u.cost;G.upgrades[u.id]=true;u.fx();addEv('✅ Upgraded: '+u.name,'good');renderUpgrades();
+}
+
+// ═══════════════════════
+// RENDER
+// ═══════════════════════
+function renderUI(gen,dem){
+  const mw=n=>Math.round(n).toLocaleString()+' MW';
+  // Needle
+  const angle=-90+((Math.max(49,Math.min(51,G.freq))-49)/2)*180;
+  document.getElementById('needle').setAttribute('transform',`rotate(${angle},80,85)`);
+  // Freq display
+  const fe=document.getElementById('freq-display');
+  fe.textContent=G.freq.toFixed(2);
+  const stable=G.freq>=49.8&&G.freq<=50.2,warn=G.freq>=49.5&&G.freq<=50.5;
+  fe.style.color=stable?'var(--green)':warn?'var(--amber)':'var(--red)';
+  const st=document.getElementById('freq-status');
+  st.textContent=stable?'STABLE':warn?'WARNING':'CRITICAL';
+  st.style.color=stable?'var(--green)':warn?'var(--amber)':'var(--red)';
+  // Header
+  document.getElementById('hdr-freq').textContent=G.freq.toFixed(2)+' Hz';
+  document.getElementById('hdr-freq').className='val '+(stable?'good':warn?'warn':'danger');
+  document.getElementById('hdr-score').textContent=Math.round(G.score).toLocaleString();
+  document.getElementById('hdr-balance').textContent='£'+Math.round(G.balance).toLocaleString();
+  document.getElementById('hdr-env').textContent=Math.round(G.envScore);
+  const net=gen-dem;
+  document.getElementById('hdr-net').textContent=(net>=0?'+':'')+Math.round(net)+' MW';
+  document.getElementById('hdr-net').className='val '+(Math.abs(net)<100?'good':Math.abs(net)<300?'warn':'danger');
+  document.getElementById('hdr-clock').textContent=fmt(G.minutes);
+  document.getElementById('shift-prog-fill').style.width=((G.minutes-360)/720*100)+'%';
+  // Gen bars
+  const gasOut=G.gasTripUntil>G.minutes?0:G.gas;
+  setGen('gas',gasOut,500);setGen('nuke',G.nuke,800);setGen('solar',G.solar,350);setGen('wind',G.wind,400);setGen('hydro',G.hydro,200);
+  if(G.gasTripUntil>G.minutes){document.getElementById('gas-meta').textContent=`⚠️ TRIPPED ~${G.gasTripUntil-G.minutes}min`;document.getElementById('gas-slider').disabled=true;document.getElementById('src-gas').classList.add('tripped');}
+  else{document.getElementById('gas-meta').textContent='£3.2/MWh Max '+(G.upgrades.extraGas?750:500);document.getElementById('gas-slider').disabled=false;document.getElementById('src-gas').classList.remove('tripped');}
+  // Battery
+  const be=G.batMode==='discharge'?(G.upgrades.bigBattery?250:150):G.batMode==='charge'?-(G.upgrades.bigBattery?180:120):0;
+  document.getElementById('batt-mw').textContent=(be>=0?'+':'')+be+' MW';document.getElementById('batt-mw').className='gen-mw'+(be===0?' zero':'');
+  document.getElementById('batt-level').style.width=(G.bat/G.maxBat*100)+'%';document.getElementById('batt-kwh').textContent=`${Math.round(G.bat)}/${G.maxBat} MWh`;
+  document.getElementById('batt-status-lbl').textContent=G.batMode==='discharge'?`Discharging +${be} MW`:G.batMode==='charge'?`Charging ${be} MW`:'Standby';
+  // Balance bar
+  document.getElementById('bal-gen').textContent=mw(gen);document.getElementById('bal-dem').textContent=mw(dem);
+  document.getElementById('bal-net').textContent=(net>=0?'+':'')+mw(net);
+  document.getElementById('bal-net').style.color=Math.abs(net)<100?'var(--green)':Math.abs(net)<250?'var(--amber)':'var(--red)';
+  const bf=document.getElementById('bal-fill'),bpct=Math.max(0,Math.min(100,50+(net/600)*50));
+  if(net>=0){bf.style.left='50%';bf.style.right='auto';bf.style.width=(bpct-50)+'%';bf.style.background=net<200?'var(--green)':'var(--amber)';}
+  else{bf.style.right='50%';bf.style.left='auto';bf.style.width=(50-bpct)+'%';bf.style.background='var(--red)';}
+  document.getElementById('gas-cost').textContent='£'+Math.round(gasOut*3.2)+'/hr';
+  document.getElementById('ic-cost').textContent=G.ic==='import'?'£2,800/hr':G.ic==='export'?'-£400/hr':'£0/hr';
+  // Cooldowns
+  renderCDs();
+  // Demand
+  document.getElementById('demand-disp').textContent=mw(dem);
+  const tr=dem>G.prevDemand+15?'↑ Rising':dem<G.prevDemand-15?'↓ Falling':'→ Steady';
+  document.getElementById('demand-trend').textContent=tr;document.getElementById('demand-trend').style.color=dem>G.prevDemand+15?'var(--amber)':dem<G.prevDemand-15?'var(--green)':'var(--text-dim)';
+  const dh=document.getElementById('demand-hist');dh.innerHTML='';const mx=Math.max(...G.demHist,900);
+  G.demHist.forEach((d,i)=>{const b=document.createElement('div');b.className='mini-bar';b.style.height=(d/mx*100)+'%';b.style.background=i===G.demHist.length-1?'var(--cyan)':'rgba(61,139,255,0.4)';dh.appendChild(b);});
+  // Weather
+  renderWeather();
+  document.getElementById('solar-fcast').textContent=G.minutes<450?'Sunrise ~07:30':G.minutes>960?'Offline':G.solar+' MW';
+  document.getElementById('wind-spd').textContent=G.windSpeed.toFixed(0)+' m/s';
+  // Bottom
+  document.getElementById('bot-score').textContent=Math.round(G.score).toLocaleString();
+  document.getElementById('env-fill').style.width=G.envScore+'%';
+  document.getElementById('env-fill').style.background=G.envScore>65?'linear-gradient(90deg,var(--green),var(--cyan))':G.envScore>35?'linear-gradient(90deg,var(--amber),var(--green))':'var(--red)';
+  const sp=G.totalTicks>0?Math.round(G.stableTicks/G.totalTicks*100):100;
+  document.getElementById('stab-pct').textContent=sp+'% STABLE';document.getElementById('stab-pct').style.color=sp>80?'var(--green)':sp>50?'var(--amber)':'var(--red)';
+  document.getElementById('map-container').classList.toggle('alarming',!warn);
+}
+
+function setGen(n,v,mx){
+  const m=document.getElementById(n+'-mw'),b=document.getElementById(n+'-bar');
+  if(m){m.textContent=v+' MW';m.className='gen-mw'+(v===0?' zero':'');}
+  if(b) b.style.width=Math.min(100,v/mx*100)+'%';
+}
+
+function renderCDs(){
+  // Nuke
+  const nr=G.cd.nuke,np=nr/CD_TICKS.nuke*100;
+  document.getElementById('nuke-dn').disabled=nr>0;document.getElementById('nuke-up').disabled=nr>0;
+  document.getElementById('nuke-cd-bar').style.width=np+'%';document.getElementById('nuke-cd-bar2').style.width=np+'%';
+  document.getElementById('nuke-cd-lbl').textContent=nr>0?Math.ceil(nr/5)+'s':'';
+  // Hydro
+  const hr=G.cd.hydro,hp=hr/CD_TICKS.hydro*100;
+  document.getElementById('hydro-dn').disabled=hr>0;document.getElementById('hydro-up').disabled=hr>0;
+  document.getElementById('hydro-cd-bar').style.width=hp+'%';document.getElementById('hydro-cd-bar2').style.width=hp+'%';
+  document.getElementById('hydro-cd-lbl').textContent=hr>0?Math.ceil(hr/5)+'s':'';
+  // Battery
+  const br=G.cd.bat,bp=br/CD_TICKS.bat*100;
+  document.getElementById('batt-cd-bar').style.width=bp+'%';
+  document.getElementById('btn-dis').disabled=br>0&&G.batMode!=='discharge';
+  document.getElementById('btn-chg').disabled=br>0&&G.batMode!=='charge';
+  document.getElementById('batt-cd-lbl').textContent=br>0?`CD ${Math.ceil(br/5)}s`:'';
+  // IC
+  const ir=G.cd.ic,ip=ir/CD_TICKS.ic*100;
+  document.getElementById('ic-cd-bar').style.width=ip+'%';
+  document.getElementById('btn-imp').disabled=ir>0&&G.ic!=='import';
+  document.getElementById('btn-exp').disabled=ir>0&&G.ic!=='export';
+  // Curtail
+  const cr=G.cd.curt,cp=cr/CD_TICKS.curt*100;
+  document.getElementById('curt-cd-bar').style.width=cp+'%';
+  document.getElementById('btn-curt').disabled=cr>0;
+}
+
+function renderWeather(){
+  const m=G.minutes;
+  let icon,title,desc;
+  if(m<420){icon='🌙';title='Pre-dawn';desc='Clear night — low demand';}
+  else if(m<480){icon='🌅';title='Sunrise';desc='Solar output rising';}
+  else if(G.cloudCover>50){icon='☁️';title='Overcast';desc='Cloud cutting solar ~75%';}
+  else if(m<780){icon='☀️';title='Daytime';desc='Peak solar — good generation';}
+  else if(m<960){icon='🌇';title='Afternoon';desc='Solar fading, wind active';}
+  else{icon='🌆';title='Evening';desc='High demand, no solar';}
+  document.getElementById('wx-icon').textContent=icon;document.getElementById('wx-title').textContent=title;document.getElementById('wx-desc').textContent=desc;
+  document.getElementById('wx-wind').textContent=G.windSpeed.toFixed(0)+' m/s';document.getElementById('wx-cloud').textContent=G.cloudCover+'%';
+  document.getElementById('wx-solar').textContent=Math.round(G.solar/350*100)+'%';
+  document.getElementById('wx-temp').textContent=Math.round(7+Math.sin((m-360)/720*Math.PI)*9)+'°C';
+}
+
+// ═══════════════════════
+// TICK
+// ═══════════════════════
+const TICK_MS=200;let lastTs=0,rafId=null;
+
+function tick(ts){
+  if(!G.running) return;
+  if(ts-lastTs<TICK_MS){rafId=requestAnimationFrame(tick);return;}
+  lastTs=ts;G.tick++;G.totalTicks++;
+  // Decay cooldowns
+  Object.keys(G.cd).forEach(k=>{if(G.cd[k]>0)G.cd[k]--;});
+  if(G.tick%2===0){G.minutes+=2;checkEvents();}
+  if(G.minutes>=1080){endGame(true);return;}
+  G.solar=getSolar();G.wind=getWind();
+  let be=0;
+  if(G.batMode==='discharge'&&G.bat>0){be=G.upgrades.bigBattery?250:150;G.bat=Math.max(0,G.bat-1.8);if(G.bat<=0){setBatt('off');addEv('🔋 Battery depleted!','warn');}}
+  else if(G.batMode==='charge'&&G.bat<G.maxBat){be=-(G.upgrades.bigBattery?180:120);G.bat=Math.min(G.maxBat,G.bat+1.5);}
+  let ice=G.ic==='import'?200:G.ic==='export'?-150:0;
+  if(G.ic==='import') G.balance-=0.6;
+  else if(G.ic==='export') G.balance+=0.3;
+  const gasOut=G.gasTripUntil>G.minutes?0:G.gas;
+  const gen=gasOut+G.nuke+G.solar+G.wind+G.hydro+be+ice;
+  const dem=getDemand();
+  G.prevDemand=G.demand;G.demand=dem;
+  G.freq=computeFreq(gen,dem);
+  G.balance-=(gasOut/1000)*3.2*0.2*60;
+  const stable=G.freq>=49.9&&G.freq<=50.1,inband=G.freq>=49.5&&G.freq<=50.5;
+  G.balance+=stable?7:inband?1.5:-4;
+  G.envScore=Math.max(0,Math.min(100,G.envScore-(gasOut/2200)*0.25+(G.solar+G.wind)/12000*0.08));
+  if(stable){G.score+=3;G.stableTicks++;}else if(inband) G.score+=0.5;
+  G.demHist.push(dem);if(G.demHist.length>22) G.demHist.shift();
+  if(G.freq<49.0||G.freq>51.0) addEv(`⚡ ALARM: ${G.freq.toFixed(2)} Hz`,'danger');
+  if(G.freq<48.5||G.freq>51.5){endGame(false,`Frequency ${G.freq.toFixed(2)} Hz — cascade failure`);return;}
+  renderUI(gen,dem);updateMap();
+  rafId=requestAnimationFrame(tick);
+}
+
+// ═══════════════════════
+// FLOW
+// ═══════════════════════
+function fmt(m){return String(Math.floor(m/60)%24).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
+function endGame(win,reason){
+  G.running=false;if(rafId)cancelAnimationFrame(rafId);
+  const sp=G.totalTicks>0?Math.round(G.stableTicks/G.totalTicks*100):0;
+  if(win){
+    ['win-score','win-balance','win-uptime','win-env'].forEach((id,i)=>{
+      document.getElementById(id).textContent=[Math.round(G.score).toLocaleString(),'£'+Math.round(G.balance).toLocaleString(),sp+'%',Math.round(G.envScore)][i];
+    });
+    document.getElementById('success-screen').classList.add('show');
+  }else{
+    document.getElementById('fail-reason').textContent=reason||'Frequency out of range';
+    document.getElementById('fail-score').textContent=Math.round(G.score).toLocaleString();
+    document.getElementById('fail-time').textContent=fmt(G.minutes);
+    document.getElementById('fail-balance').textContent='£'+Math.round(G.balance).toLocaleString();
+    document.getElementById('fail-uptime').textContent=sp+'%';
+    document.getElementById('fail-screen').classList.add('show');
+  }
+}
+function startGame(){
+  document.getElementById('intro-screen').classList.remove('show');
+  G.running=true;
+  addEv('⚡ Shift started — keep 49.8–50.2 Hz until 18:00','good');
+  addEv('💡 Nuclear/Hydro use pulse buttons with cooldowns. Gas is continuous.','info');
+  rafId=requestAnimationFrame(tick);
+}
+function resetGame(){
+  ['fail-screen','success-screen'].forEach(id=>document.getElementById(id).classList.remove('show'));
+  if(rafId)cancelAnimationFrame(rafId);
+  Object.assign(G,{freq:50.0,balance:10000,envScore:100,score:0,minutes:360,bat:300,maxBat:600,batMode:'off',ic:'off',curtail:false,demand:800,prevDemand:800,gas:200,nuke:400,solar:0,wind:80,hydro:0,windSpeed:8,cloudCover:10,weatherName:'predawn',tick:0,stableTicks:0,totalTicks:0,demHist:[],upgrades:{},cd:{nuke:0,hydro:0,bat:0,ic:0,curt:0},demandSurge:0,gasTripUntil:0});
+  _curtailOn=false;EVENTS.forEach(e=>e.fired=false);
+  document.getElementById('gas-slider').value=200;document.getElementById('gas-slider').max=500;document.getElementById('gas-slider').disabled=false;
+  document.getElementById('ev-list').innerHTML='';
+  ['btn-boff','btn-icoff'].forEach(id=>document.getElementById(id).classList.add('active'));
+  ['btn-dis','btn-chg','btn-imp','btn-exp','btn-curt'].forEach(id=>{const e=document.getElementById(id);e.classList.remove('active','gr','am');e.disabled=false;});
+  document.getElementById('curt-lbl').textContent='−0 MW demand';
+  document.getElementById('ic-status').textContent='Interconnect offline';
+  renderUpgrades();
+  G.running=true;lastTs=0;
+  addEv('⚡ New shift: 06:00–18:00','good');
+  rafId=requestAnimationFrame(tick);
+}
+window.addEventListener('DOMContentLoaded',()=>{initMap();renderUpgrades();});
+window.addEventListener('resize',()=>{
+  if(!proj) return;
+  const cont=document.getElementById('map-container'),svg=document.getElementById('map-svg');
+  const W=cont.clientWidth,H=cont.clientHeight;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  const PAD=20;proj.fitExtent([[PAD,PAD],[W-PAD,H-PAD]],UK_BBOX);pg=d3.geoPath().projection(proj);
+  d3.select('#gb-outline').attr('d',pg);
+  d3.selectAll('.reg-path').attr('d',pg);
+  REGIONS.forEach((r,i)=>{const feat=geojson.features[i];const [cx,cy]=pg.centroid(feat);if(!isNaN(cx)){d3.select('#reg-'+r.id+' text').attr('x',cx).attr('y',cy+1);d3.select('#reg-'+r.id+' .city-dot').attr('cx',cx).attr('cy',cy);}});
+  PLINES.forEach(([a,b],i)=>{const ca=REGIONS[a].coords,cb=REGIONS[b].coords;const ax=ca.reduce((s,c)=>s+c[0],0)/ca.length,ay=ca.reduce((s,c)=>s+c[1],0)/ca.length;const bx=cb.reduce((s,c)=>s+c[0],0)/cb.length,by=cb.reduce((s,c)=>s+c[1],0)/cb.length;const [x1,y1]=proj([ax,ay]),[x2,y2]=proj([bx,by]);d3.select('#pl-'+i).attr('x1',x1).attr('y1',y1).attr('x2',x2).attr('y2',y2);});
+});
+</script>
+</body>
+</html>
