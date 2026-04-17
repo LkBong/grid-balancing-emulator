@@ -418,6 +418,7 @@ body::after{content:'';position:fixed;inset:0;background-image:linear-gradient(r
 // ═══════════════════════
 // STATE
 // ═══════════════════════
+// G is the single source of truth for the entire app state. It holds all variables related to the grid, generation, demand, weather, upgrades, cooldowns, and so on. The game loop will read from and write to G as needed, and the UI will update based on changes to G.
 const G={
   freq:50.0,balance:10000,envScore:100,score:0,minutes:360,
   bat:300,maxBat:600,batMode:'off',
